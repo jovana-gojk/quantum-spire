@@ -1,5 +1,4 @@
-from quantum import build_circuit, run_circuit
-from game import Game, GateCard, AttackCard, SkillCard
+from game import Game
 
 def get_backend():
     # Use Qollab's backend if available, otherwise use local Aer
@@ -14,36 +13,14 @@ def get_backend():
     return AerSimulator()
 
 
-def main(shots: int = 1):
+def main():
     backend = get_backend()
     game = Game(backend=backend)
     game.start_floor()
-    game.start_turn()
-
-    game.play_card(GateCard("Pauli-X", 1, "x"))
-    game.play_card(AttackCard("Attack", 1, damage=6))
-    game.play_card(SkillCard("Shield", 1, block=5))
-
-    print("Active gates:", game.active_gates)
-    print("Pending damage:", game.pending_damage)
-
-    game.end_turn()
-    """gates = [
-        ("x", 0),
-    ]
-    circuit = build_circuit(n_qubits=1, gates=gates)
-
-    print(circuit.draw(output="text"))
-
-    counts, probabilities = run_circuit(circuit, shots, backend)
-
-    print("\nCounts:", counts)
-    print("Probabilities:")
-
-    for outcome, probability in sorted(probabilities.items()):
-        print(f"{outcome}: {probability:.1%}")"""
-
-
+    while game.enemy.health > 0 and game.player.health > 0:
+        game.start_turn()
+        game.play_hand()
+        game.end_turn()
 
 # Run on my own computer
 if __name__ == "__main__" and "backend" not in globals():
