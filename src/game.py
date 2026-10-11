@@ -1,6 +1,8 @@
 import random
 import os
-from quantum import build_circuit, run_circuit
+import copy
+import time
+from quantum import build_circuit, get_exact_probabilities, run_circuit
 
 # Game constants
 STARTING_HEALTH = 30
@@ -9,9 +11,13 @@ STARTING_QUBITS = 1
 STARTING_BLOCK = 0
 
 MAX_QUBITS = 4
-DEFAULT_SHOTS = 1024
 
 STARTING_FLOOR = 1
+EVENT_FLOORS = {
+    3: "Campfire",
+    7: "Quantum Smithy",
+    9: "Card Archive",
+}
 FLOORS = {
     # Floor 1: One-qubit shields
     1: [
@@ -150,14 +156,6 @@ class Player:
         # Get amount of block listed by cards
         self.block += block
 
-    def deal_damage(damage, target):
-        # Check if they have shield
-        if True:
-            return False
-        else:
-            target.health -= damage
-            return True
-
 class Enemy:
     def __init__(self, name, health, state_shield, damage):
         self.name = name
@@ -177,7 +175,7 @@ class Enemy:
 
         over_damage = self.damage - blocked
         player.health = max(0, player.health - over_damage)
-
+        return over_damage
 
 class Game:
     def __init__(self, backend):
@@ -199,12 +197,62 @@ class Game:
         self.circuit_probabilities = {}
 
     def start_floor(self):
-        if self.floor == 1:
-            self.enemy = Enemy(name="Guard", health=20, state_shield="1", damage=5)
-
+        self.active_gates = []
+        self.circuit_preview = None
+        self.circuit_probabilities = {}
+        self.turn = 0
         print(f"Floor {self.floor} started!")
-        print(f"Enemy: {self.enemy.name}")
-        print(f"Enemy health: {self.enemy.health}, State shield: {self.enemy.state_shield}")
+        if self.floor in EVENT_FLOORS:
+            self.enemy = None
+            print(f"{EVENT_FLOORS[self.floor]}: gain a qubit, recover health, and add a card.")
+            self.grant_floor_rewards()
+            return False
+
+        if self.floor not in FLOORS:
+            raise ValueError(f"No encounter is configured for floor {self.floor}.")
+
+        enemy_data = random.choice(FLOORS[self.floor])
+        self.enemy = Enemy(**enemy_data)
+        return True
+
+    def grant_floor_rewards(self):
+        if self.player.qubits < MAX_QUBITS:
+            self.player.qubits += 1
+            print(f"Gained a qubit. You now have {self.player.qubits}.")
+        else:
+            print(f"Already at the maximum of {MAX_QUBITS} qubits.")
+
+        self.player.health_change(10)
+        print(f"Recovered 10 health. HP: {self.player.health}/{self.player.max_health}")
+
+        print("Choose a card to add to your deck:")
+        for index, card in enumerate(CARD_POOL, start=1):
+            print(f"{index}. {card.name} (Energy: {card.energy_cost})")
+
+        while True:
+            choice = input(f"Choose a card (1-{len(CARD_POOL)}): ").strip()
+            if choice.isdigit() and 1 <= int(choice) <= len(CARD_POOL):
+                selected_card = copy.deepcopy(CARD_POOL[int(choice) - 1])
+                self.player.deck.append(selected_card)
+                self.draw_pile.append(copy.deepcopy(selected_card))
+                print(f"Added {selected_card.name} to your deck.")
+                break
+            print(f"Choose a number from 1 to {len(CARD_POOL)}.")
+
+    def run(self):
+        final_floor = max((*FLOORS.keys(), *EVENT_FLOORS.keys()))
+        while self.floor <= final_floor and self.player.health > 0:
+            has_combat = self.start_floor()
+            if has_combat:
+                while self.enemy.health > 0 and self.player.health > 0:
+                    self.gameplay_turn()
+            if self.player.health > 0:
+                self.floor += 1
+
+        if self.player.health > 0:
+            print("You conquered Quantum Spire!")
+        else:
+            print("Run ended.")
 
     def resolve_circuit(self):
         circuit = build_circuit(n_qubits=self.player.qubits, gates=self.active_gates)
@@ -212,10 +260,36 @@ class Game:
         counts, probabilities = run_circuit(circuit, shots=1, backend=self.backend)
         outcome = next(iter(counts))
 
-        print("Measurement:", outcome)
+        print(f"Measurement: |{outcome}⟩")
 
-        if outcome[-1] == self.enemy.state_shield:
+        shield_length = len(self.enemy.state_shield)
+        if outcome[-shield_length:] == self.enemy.state_shield and self.enemy.shield_status:
             self.enemy.shield_status = False
+            print("Quantum state shield broken!")
+            return True
+        return False
+
+    def apply_gate_passives(self):
+        for gate in self.active_gates:
+            name = gate[0]
+            if name == "h":
+                self.player.get_block(3)
+                print("Hadamard passive: gained 3 block.")
+            elif name == "x":
+                self.enemy.health = max(0, self.enemy.health - 3)
+                print("Pauli-X passive: dealt 3 damage.")
+            elif name == "y":
+                self.player.health_change(2)
+                print("Pauli-Y passive: recovered 2 health.")
+            elif name == "z":
+                self.enemy.health = max(0, self.enemy.health - 3)
+                print("Pauli-Z passive: dealt 3 damage.")
+            elif name == "cx":
+                self.enemy.health = max(0, self.enemy.health - 6)
+                print("CNOT passive: dealt 6 damage.")
+            elif name == "cz":
+                self.enemy.health = max(0, self.enemy.health - 6)
+                print("CZ passive: dealt 6 damage.")
 
     def draw_hand(self):
         self.hand = []
@@ -230,22 +304,22 @@ class Game:
             self.hand.append(self.draw_pile.pop())
 
     def show_hand(self):
-        print("Hand:")
+        print("\nHand:")
         if not self.hand:
             print("(empty)")
             return
 
         for index, card in enumerate(self.hand, start=1):
             print(f"{index}. {card.name} (Energy: {card.energy_cost})")
+        print(f"Energy:     {self.player.energy}/{self.player.max_energy}")
 
     def show_status(self):
-        print(f"Player HP:  {self.player.health}/{self.player.max_health}       Block:      {self.player.block}")
-        print(f"Energy:     {self.player.energy}/{self.player.max_energy}")
-        print(f"Enemy:      {self.enemy.name}")
-        print(f"Enemy HP:   {self.enemy.health}/{self.enemy.max_health}")
+        print(f"Player HP:  {self.player.health}/{self.player.max_health}       Block:  {self.player.block}")
+        print(f"\nEnemy:    {self.enemy.name}")
+        print(f"Enemy HP:   {self.enemy.health}/{self.enemy.max_health}     Incoming Damage:   {self.enemy.damage}")
 
         shield = "ACTIVE" if self.enemy.shield_status else "BROKEN"
-        print(f"Shield:     {shield} (requires |{self.enemy.state_shield}⟩)")
+        print(f"Quantum State Shield:   {shield} (requires |{self.enemy.state_shield}⟩)")
 
     def start_turn(self):
         if self.enemy.health <= 0 or self.player.health <= 0:
@@ -255,7 +329,6 @@ class Game:
         self.turn += 1
         self.player.energy = self.player.max_energy
         self.player.block = 0
-        self.active_gates = []
         self.pending_damage = 0
 
         print(f"---- Turn {self.turn} ----")
@@ -265,10 +338,10 @@ class Game:
 
     def update_circuit_preview(self):
         self.circuit_preview = build_circuit(n_qubits=self.player.qubits, gates=self.active_gates)
-        counts, self.circuit_probabilities = run_circuit(self.circuit_preview, shots=DEFAULT_SHOTS, backend=self.backend)
+        self.circuit_probabilities = get_exact_probabilities(self.circuit_preview)
 
     def show_circuit(self):
-        print("Circuit:")
+        print("\nCircuit:")
         if self.circuit_preview is None:
             print("(no circuit)")
             return
@@ -286,9 +359,7 @@ class Game:
         self.start_turn()
         self.update_circuit_preview()
         self.play_hand()
-
-        self.discard_pile.extend(self.hand)
-        self.hand.clear()
+        self.end_turn()
 
     def play_hand(self):
         while self.hand:
@@ -306,11 +377,12 @@ class Game:
                 self.discard_pile.append(self.hand.pop(hand_index))
                 if isinstance(card, GateCard):
                     self.update_circuit_preview()
+                input("\nCard played. Press Enter to continue...")
         self.display_game()
 
     def play_card(self, card, qubit=0, control=0, target=1):
         if card.energy_cost > self.player.energy:
-            print("Not enough energy")
+            input("\nNot enough energy. Press Enter to continue...")
             return False
 
         # Invalid gate card placement
@@ -320,15 +392,17 @@ class Game:
                     control < 0 or target < 0 or 
                     control >= self.player.qubits or 
                     target >= self.player.qubits):
-                    print("Invalid qubit targets")
+                    input("\nInvalid qubit targets. Press Enter to continue...")
                     return False
                 
             elif qubit < 0 or qubit >= self.player.qubits:
-                print("Unavailable qubit")
+                input("\nUnavailable qubit. Press Enter to continue...")
                 return False
 
         if not self.player.play_cards(card.energy_cost):
             return False
+
+        print(f"\nPlayed {card.name}.")
 
         # Valid gate card placements
         if isinstance(card, GateCard):
@@ -373,25 +447,38 @@ class Game:
 
 
     def end_turn(self):
+        print()
+        if self.enemy.shield_status == False:
+            self.apply_gate_passives()
+            
         self.resolve_circuit()
-        
-        if self.enemy.shield_status == False and self.player.health > 0:
+        print()
+        if self.enemy.shield_status:
+            if self.pending_damage > 0:
+                print("The quantum state shield blocked the attack!")
+            else:
+                print(f"Measure |{self.enemy.state_shield}⟩ to break the state shield.")
+        elif self.player.health > 0:
+
             self.enemy.take_damage(self.pending_damage)
-            print(f"Shield broken! Dealt {self.pending_damage} damage.")
-        else:
-            print("The shield blocked the attack!")
+            print(f"You dealt {self.pending_damage} damage.")
 
         self.pending_damage = 0
 
         if self.enemy.health > 0:
-            self.enemy.do_damage(self.player)
-            print(f"Player health: {self.player.health}")
-            print(f"Player block: {self.player.block}")
+            blocked = self.player.block - self.enemy.damage
+            over_damage = self.enemy.do_damage(self.player)
+
+            if blocked >= 0:
+                print(f"You blocked {self.enemy.damage} damage.")
+
+            print(f"The enemy dealt {over_damage} damage to you.")
         else:
             print("Enemy defeated!")
 
         if self.player.health <= 0:
             print("You have been defeated!")
 
+        input("\nPress Enter to continue...")
         self.discard_pile.extend(self.hand)
         self.hand.clear()
