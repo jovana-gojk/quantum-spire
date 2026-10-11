@@ -2,6 +2,7 @@
 
 from qiskit import QuantumCircuit
 from qiskit.providers.jobstatus import JobStatus
+from qiskit.quantum_info import Statevector
 import time
 
 def build_circuit(n_qubits, gates):
@@ -27,6 +28,13 @@ def build_circuit(n_qubits, gates):
 
     circuit.measure(range(n_qubits), range(n_qubits))
     return circuit
+
+
+def get_exact_probabilities(circuit):
+    unitary_circuit = circuit.remove_final_measurements(inplace=False)
+    statevector = Statevector.from_instruction(unitary_circuit)
+    return statevector.probabilities_dict()
+
 
 def run_circuit(circuit, shots=1, backend=None):
     job = backend.run(circuit, shots=shots)
