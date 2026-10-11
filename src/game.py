@@ -2,7 +2,8 @@ import random
 import os
 import copy
 import time
-from quantum import build_circuit, get_exact_probabilities, run_circuit
+from quantum import build_circuit, check_bell, check_deutsch_jozsa, check_ghz, get_exact_probabilities, run_circuit
+
 
 # Game constants
 STARTING_HEALTH = 30
@@ -14,58 +15,59 @@ MAX_QUBITS = 4
 
 STARTING_FLOOR = 1
 EVENT_FLOORS = {
-    3: "Campfire",
-    7: "Quantum Smithy",
-    9: "Card Archive",
+    3: "Spin Lab",
+    7: "Superconducting Lab",
+    9: "Photonics Lab",
 }
+
 FLOORS = {
-    # Floor 1: One-qubit shields
+    # Floor 1: Basic one-qubit shields
     1: [
-        {"name": "Guard", "health": 20, "state_shield": "1", "damage": 5},
-        {"name": "Lost Qubit", "health": 16, "state_shield": "0", "damage": 4},
-        {"name": "Twin Initiates", "health": 24, "state_shield": "1", "damage": 5},
+        {"name": "The Bitwarden", "health": 20, "state_shield": "1", "damage": 5},
+        {"name": "Basis Zero", "health": 16, "state_shield": "0", "damage": 4},
+        {"name": "Flip-Flops", "health": 24, "state_shield": "1", "damage": 5},
     ],
 
-    # Floor 2: Stronger one-qubit enemies
+    # Floor 2: Stronger one-qubit shields
     2: [
-        {"name": "Wraith", "health": 26, "state_shield": "0", "damage": 6},
-        {"name": "Phase Thief", "health": 22, "state_shield": "1", "damage": 7},
-        {"name": "Entangled Pair", "health": 30, "state_shield": "0", "damage": 6},
+        {"name": "Schrodinger's Cat", "health": 26, "state_shield": "0", "damage": 6},
+        {"name": "Heisenberg's Uncertainty", "health": 22, "state_shield": "1", "damage": 7},
+        {"name": "Spin Up", "health": 30, "state_shield": "0", "damage": 6},
     ],
 
-    # Floor 4: Two-qubit shields
+    # Floor 4: Introduce two-qubit shields and Bell states
     4: [
-        {"name": "Watcher", "health": 34, "state_shield": "00", "damage": 7},
-        {"name": "Glitch", "health": 30, "state_shield": "10", "damage": 8},
-        {"name": "Twin Sentinels", "health": 40, "state_shield": "11", "damage": 7},
+        {"name": "The Ground State", "health": 34, "state_shield": "00", "damage": 7},
+        {"name": "Decoherer", "health": 30, "state_shield": "10", "damage": 8},
+        {"name": "Alice and Bob", "health": 40, "state_shield": None, "damage": 7, "shield_type": "bell", "gimmick": "phi_plus"},
     ],
 
-    # Floor 5: Two-qubit shields
+    # Floor 5: More two-qubit shields and a different Bell state
     5: [
-        {"name": "Iron Golem", "health": 44, "state_shield": "11", "damage": 8},
-        {"name": "Phase Knight", "health": 38, "state_shield": "01", "damage": 9},
-        {"name": "Probability Witch", "health": 35, "state_shield": "00", "damage": 10},
+        {"name": "The Pauli Exclusion", "health": 44, "state_shield": "11", "damage": 8},
+        {"name": "Bell's Inequality", "health": 38, "state_shield": None, "damage": 9, "shield_type": "bell", "gimmick": "phi_minus"},
+        {"name": "Interferess", "health": 35, "state_shield": "00", "damage": 10},
     ],
 
-    # Floor 6: Final two-qubit encounter before the upgrade
+    # Floor 6: Final two-qubit encounters before the upgrade
     6: [
-        {"name": "Void Stalker", "health": 48, "state_shield": "00", "damage": 9},
+        {"name": "The Singlet", "health": 48, "state_shield": None, "damage": 9, "shield_type": "bell", "gimmick": "psi_plus"},
         {"name": "Broken Circuit", "health": 44, "state_shield": "10", "damage": 10},
-        {"name": "Gatekeeper", "health": 54, "state_shield": "11", "damage": 9},
+        {"name": "The Phasebound", "health": 54, "state_shield": None, "damage": 9, "shield_type": "bell", "gimmick": "psi_minus"},
     ],
 
     # Floor 8: Three-qubit shields
     8: [
-        {"name": "Crystal Titan", "health": 65, "state_shield": "000", "damage": 11},
-        {"name": "Void Twins", "health": 72, "state_shield": "101", "damage": 12},
-        {"name": "Circuit Devourer", "health": 60, "state_shield": "110", "damage": 13},
+        {"name": "True Null", "health": 65, "state_shield": "000", "damage": 11},
+        {"name": "Intro Class", "health": 72, "state_shield": "101", "damage": 12},
+        {"name": "Dense Matrix", "health": 60, "state_shield": "110", "damage": 13},
     ],
 
-    # Floor 10: Bosses
+    # Floor 10: Bosses with distinct quantum challenges
     10: [
-        {"name": "Quantum Warden", "health": 100, "state_shield": "111", "damage": 14},
-        {"name": "Architect of Chaos", "health": 110, "state_shield": "010", "damage": 16},
-        {"name": "Entanglement King", "health": 125, "state_shield": "101", "damage": 15},
+        {"name": "Toffoli Tyrant", "health": 100, "state_shield": "111", "damage": 14, "shield_type": "toffoli"},
+        {"name": "The Oracle", "health": 110, "state_shield": None, "damage": 16, "shield_type": "deutsch"},
+        {"name": "Green Horned Zebra", "health": 125, "state_shield": None, "damage": 15, "shield_type": "ghz"},
     ],
 }
 
@@ -104,6 +106,7 @@ CARD_POOL = [
     GateCard("Pauli-Y", 1, "y"),
     GateCard("CNOT", 1, "cx"),
     GateCard("CZ", 1, "cz"),
+    GateCard("Toffoli", 1, "ccx"),
     # Skill cards
     SkillCard("Shield", 1, block=5),
     SkillCard("Heal", 2, healing=6),
@@ -155,17 +158,19 @@ class Player:
         self.block += block
 
 class Enemy:
-    def __init__(self, name, health, state_shield, damage):
+    def __init__(self, name, health, state_shield, damage, shield_type=None, gimmick=None):
         self.name = name
         self.health = health
         self.max_health = health
         self.state_shield = state_shield
-        self.shield_status = True
+        self.shield_type = shield_type
+        self.gimmick = gimmick
+        self.shield_status = self.shield_type is not None or self.state_shield is not None
         self.damage = damage
         self.is_attacking = True
 
     def take_damage(self, amount):
-        if self.shield_status == False:
+        if not self.shield_status:
             self.health = max(0, self.health - amount)
 
     def do_damage(self, player):
@@ -225,32 +230,76 @@ class Game:
         self.enemy = Enemy(**enemy_data)
         return True
 
+    def add_card(self, card):
+        new_card = copy.deepcopy(card)
+        self.player.deck.append(new_card)
+        self.draw_pile.append(copy.deepcopy(new_card))
+        random.shuffle(self.draw_pile)
+        print(f"Added {new_card.name} to your deck.")
+
+    def choose_card_reward(self, exclude=None):
+        # Cards that can never appear as reward choices
+        excluded_cards = [
+            "Shield",
+            "Attack",
+            "Pauli-X",
+            "Hadamard",
+        ]
+
+        # Add any floor-specific exclusions
+        if exclude:
+            excluded_cards.extend(exclude)
+
+        cards = [card for card in CARD_POOL if card.name not in excluded_cards]
+        # Choose 3 different options
+        options = random.sample(cards, min(3, len(cards)))
+
+        print("\nChoose a card to add to your deck:")
+        for index, card in enumerate(options, start=1):
+            print(f"{index}. {card.name} (Energy: {card.energy_cost})")
+
+        while True:
+            choice = input(f"Choose a card (1-{len(options)}): ").strip()
+
+            if choice.isdigit() and 1 <= int(choice) <= len(options):
+                selected_card = options[int(choice) - 1]
+                self.add_card(selected_card)
+                return
+
+            print(f"Choose a number from 1 to {len(options)}.")
+
     def grant_floor_rewards(self):
+        clear_terminal()
+        print(f"Welcome to floor {self.floor}, the {EVENT_FLOORS[self.floor]}!")
         # Add qubit on event floor
-        if self.player.qubits < MAX_QUBITS:
+        if self.player.qubits < MAX_QUBITS and self.floor != 9:
             self.player.qubits += 1
             print(f"Gained a qubit. You now have {self.player.qubits}.")
-        else:
-            print(f"Already at the maximum of {MAX_QUBITS} qubits.")
 
         # Heal on event floor
         self.player.health_change(10)
         print(f"Recovered 10 health. HP: {self.player.health}/{self.player.max_health}")
 
         # Add a card to your deck
-        print("Choose a card to add to your deck:")
-        for index, card in enumerate(CARD_POOL, start=1):
-            print(f"{index}. {card.name} (Energy: {card.energy_cost})")
+        if self.floor == 3:
+            cnot_card = next(card for card in CARD_POOL if card.name == "CNOT")
+            self.add_card(cnot_card)
 
-        while True:
-            choice = input(f"Choose a card (1-{len(CARD_POOL)}): ").strip()
-            if choice.isdigit() and 1 <= int(choice) <= len(CARD_POOL):
-                selected_card = copy.deepcopy(CARD_POOL[int(choice) - 1])
-                self.player.deck.append(selected_card)
-                self.draw_pile.append(copy.deepcopy(selected_card))
-                print(f"Added {selected_card.name} to your deck.")
-                break
-            print(f"Choose a number from 1 to {len(CARD_POOL)}.")
+        elif self.floor == 7:
+            toffoli_card = next(card for card in CARD_POOL if card.name == "Toffoli")
+            self.add_card(toffoli_card)
+
+        # Choose how many cards to receive
+        if self.floor == 9:
+            number_of_choices = 2
+        else:
+            number_of_choices = 1
+
+        # Floor 3: Toffoli cannot appear as a choice
+        excluded_cards = ["Toffoli"] if self.floor == 3 else []
+
+        for i in range(number_of_choices):
+            self.choose_card_reward(exclude=excluded_cards)
 
     def run(self):
         # Run the main gameplay loop for the floors
@@ -273,15 +322,34 @@ class Game:
     def resolve_circuit(self):
         # Resolve the circuit for combat
         circuit = build_circuit(n_qubits=self.player.qubits, gates=self.active_gates)
-
         counts, probabilities = run_circuit(circuit, shots=1, backend=self.backend)
         outcome = next(iter(counts))
-
         print(f"Measurement: |{outcome}⟩")
 
-        # Remove the state shield if circuit outcome is correct
-        shield_length = len(self.enemy.state_shield)
-        if outcome[-shield_length:] == self.enemy.state_shield and self.enemy.shield_status:
+        shield_type = self.enemy.shield_type
+        if not self.enemy.shield_status:
+            return False
+        if shield_type == "bell":
+            broken = check_bell(circuit, self.enemy.gimmick, backend=self.backend, max_shots=100)
+            print(f"Bell-state check: {'passed' if broken else 'failed'}.")
+
+        elif shield_type == "ghz":  
+            broken = check_ghz(circuit, backend=self.backend, max_shots=100)
+            print(f"GHZ-state check: {'passed' if broken else 'failed'}.")
+
+        elif shield_type == "deutsch":            
+            broken = check_deutsch_jozsa(circuit, backend=self.backend)
+            print(f"Deutsch-Jozsa check: {'passed' if broken else 'failed'}.")
+
+        elif shield_type == "toffoli":
+            toffoli_check = any(gate[0] == "ccx" for gate in self.active_gates)
+            broken = toffoli_check and self.enemy.state_shield is not None and outcome.endswith(self.enemy.state_shield)
+            print(f"Toffoli check: {'passed' if broken else 'failed'}.")
+
+        else:
+            broken = outcome.endswith(self.enemy.state_shield)
+
+        if broken and self.enemy.shield_status:
             self.enemy.shield_status = False
             print("Quantum state shield broken!")
             return True
@@ -309,6 +377,9 @@ class Game:
             elif name == "cz":
                 self.pending_damage += 6
                 print("CZ passive: dealt 6 damage.")
+            elif name == "cxx":
+                self.pending_damage += 6
+                print("Toffoli passive: dealt 12 damage.")
 
     def draw_hand(self):
         self.hand = []
@@ -345,9 +416,31 @@ class Game:
         else:
             phase = f"Rest"
         print(f"Enemy HP:   {self.enemy.health}/{self.enemy.max_health}     Enemy intent:   {phase}")
-
         shield = "ACTIVE" if self.enemy.shield_status else "BROKEN"
-        print(f"Quantum State Shield:   {shield} (requires |{self.enemy.state_shield}⟩)")
+
+        if self.enemy.shield_type == "bell":
+            bell_outcomes = {
+                "phi_plus": "|00⟩ and |11⟩",
+                "phi_minus": "|00⟩ and |11⟩",
+                "psi_plus": "|01⟩ and |10⟩",
+                "psi_minus": "|01⟩ and |10⟩",
+            }
+            outcomes = bell_outcomes.get(self.enemy.gimmick)
+            objective = f"produce both {outcomes}, with no other outcomes"
+
+        elif self.enemy.shield_type == "ghz":
+            objective = "produce both |000⟩ and |111⟩ outcomes on qubits 0, 1, and 2 without any other outcomes"
+
+        elif self.enemy.shield_type == "deutsch":
+            objective = "pass the Deutsch-Jozsa check by measuring |0⟩ on qubit 0"
+
+        elif self.enemy.shield_type == "toffoli":
+            objective = "play a Toffoli gate and measure the target state"
+
+        else:
+            objective = f"requires |{self.enemy.state_shield}⟩"
+
+        print(f"Quantum State Shield:   {shield} ({objective})")
         print(f"\nPending damage on enemy:    {self.pending_damage}")
 
     def start_turn(self):
@@ -408,6 +501,28 @@ class Game:
 
     def choose_gate_qubits(self, card):
         # For the gate you play choose which qubit(s) you are putting it on
+        if card.gate == "ccx":
+            print(f"Available qubits: 0 to {self.player.qubits - 1}")
+            control = self.choose_qubit("First control")
+            if control is None:
+                return None
+
+            while True:
+                second_control = self.choose_qubit("Second control")
+                if second_control is None:
+                    return None
+                if second_control != control:
+                    break
+                print("The control qubits must be different.")
+
+            while True:
+                target = self.choose_qubit("Target")
+                if target is None:
+                    return None
+                if target != control and target != second_control:
+                    return control, second_control, target
+                print("The target must be different from both control qubits.")
+
         if card.gate in ("cx", "cz"):
             if self.player.qubits < 2:
                 print(f"{card.name} requires at least 2 qubits.")
@@ -439,7 +554,7 @@ class Game:
             if not choice:
                 break
             if not choice.isdigit() or not 1 <= int(choice) <= len(self.hand):
-                print(f"Choose a number from 1 to {len(self.hand)}.")
+                input(f"Choose a number from 1 to {len(self.hand)}. Press Enter to continue...")
                 continue
 
             hand_index = int(choice) - 1
@@ -484,7 +599,10 @@ class Game:
 
         # Valid gate card placements
         if isinstance(card, GateCard):
-            if card.gate in ("cx", "cz"):
+            if card.gate == "ccx":
+                self.active_gates.append((card.gate, qubit, control, target))
+                print(f"Added Toffoli gate: qubits {qubit} and {control} control qubit {target}.")
+            elif card.gate in ("cx", "cz"):
                 self.active_gates.append((card.gate, control, target))
                 print(f"Added {card.gate.upper()} gate: "
                 f"qubit {control} -> qubit {target}.")
@@ -539,6 +657,8 @@ class Game:
         if self.enemy.shield_status:
             if self.pending_damage > 0:
                 print("The quantum state shield blocked the attack!")
+            elif self.enemy.state_shield is None:
+                print(f"Complete the {self.enemy.shield_type} shield check to break the shield.")
             else:
                 print(f"Measure |{self.enemy.state_shield}⟩ to break the state shield.")
         elif self.player.health > 0:
@@ -549,7 +669,7 @@ class Game:
         self.pending_damage = 0
 
         # Update block interaction with message in terminal
-        if self.enemy.health >= 0:
+        if self.enemy.health > 0:
             blocked = self.player.block - self.enemy.damage
             if self.enemy.is_attacking:
                 over_damage = self.enemy.do_damage(self.player)
