@@ -14,8 +14,7 @@ def get_backend():
 def main():
     backend = get_backend()
     game = Game(backend=backend)
-    game.start_floor()
-    game.gameplay_turn()
+    game.run()
 
 # Run on my own computer
 if __name__ == "__main__" and "backend" not in globals():
