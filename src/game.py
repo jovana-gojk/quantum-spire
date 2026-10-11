@@ -9,9 +9,60 @@ STARTING_QUBITS = 1
 STARTING_BLOCK = 0
 
 MAX_QUBITS = 4
-DEFAULT_SHOTS = 1
+DEFAULT_SHOTS = 1024
 
 STARTING_FLOOR = 1
+FLOORS = {
+    # Floor 1: One-qubit shields
+    1: [
+        {"name": "Guard", "health": 20, "state_shield": "1", "damage": 5},
+        {"name": "Lost Qubit", "health": 16, "state_shield": "0", "damage": 4},
+        {"name": "Twin Initiates", "health": 24, "state_shield": "1", "damage": 5},
+    ],
+
+    # Floor 2: Stronger one-qubit enemies
+    2: [
+        {"name": "Wraith", "health": 26, "state_shield": "0", "damage": 6},
+        {"name": "Phase Thief", "health": 22, "state_shield": "1", "damage": 7},
+        {"name": "Entangled Pair", "health": 30, "state_shield": "0", "damage": 6},
+    ],
+
+    # Floor 4: Two-qubit shields
+    4: [
+        {"name": "Watcher", "health": 34, "state_shield": "00", "damage": 7},
+        {"name": "Glitch", "health": 30, "state_shield": "10", "damage": 8},
+        {"name": "Twin Sentinels", "health": 40, "state_shield": "11", "damage": 7},
+    ],
+
+    # Floor 5: Two-qubit shields
+    5: [
+        {"name": "Iron Golem", "health": 44, "state_shield": "11", "damage": 8},
+        {"name": "Phase Knight", "health": 38, "state_shield": "01", "damage": 9},
+        {"name": "Probability Witch", "health": 35, "state_shield": "00", "damage": 10},
+    ],
+
+    # Floor 6: Final two-qubit encounter before the upgrade
+    6: [
+        {"name": "Void Stalker", "health": 48, "state_shield": "00", "damage": 9},
+        {"name": "Broken Circuit", "health": 44, "state_shield": "10", "damage": 10},
+        {"name": "Gatekeeper", "health": 54, "state_shield": "11", "damage": 9},
+    ],
+
+    # Floor 8: Three-qubit shields
+    8: [
+        {"name": "Crystal Titan", "health": 65, "state_shield": "000", "damage": 11},
+        {"name": "Void Twins", "health": 72, "state_shield": "101", "damage": 12},
+        {"name": "Circuit Devourer", "health": 60, "state_shield": "110", "damage": 13},
+    ],
+
+    # Floor 10: Bosses
+    10: [
+        {"name": "Quantum Warden", "health": 100, "state_shield": "111", "damage": 14},
+        {"name": "Architect of Chaos", "health": 110, "state_shield": "010", "damage": 16},
+        {"name": "Entanglement King", "health": 125, "state_shield": "101", "damage": 15},
+    ],
+}
+
 
 def clear_terminal():
     os.system("cls" if os.name == "nt" else "clear")
@@ -144,6 +195,8 @@ class Game:
         random.shuffle(self.draw_pile)
         self.discard_pile = []
         self.hand = []
+        self.circuit_preview = None
+        self.circuit_probabilities = {}
 
     def start_floor(self):
         if self.floor == 1:
@@ -200,18 +253,46 @@ class Game:
             return
 
         self.turn += 1
-
         self.player.energy = self.player.max_energy
-
         self.player.block = 0
+        self.active_gates = []
+        self.pending_damage = 0
 
         print(f"---- Turn {self.turn} ----")
         self.show_status()
         self.draw_hand()
         self.show_hand()
 
+    def update_circuit_preview(self):
+        self.circuit_preview = build_circuit(n_qubits=self.player.qubits, gates=self.active_gates)
+        counts, self.circuit_probabilities = run_circuit(self.circuit_preview, shots=DEFAULT_SHOTS, backend=self.backend)
+
+    def show_circuit(self):
+        print("Circuit:")
+        if self.circuit_preview is None:
+            print("(no circuit)")
+            return
+
+        print(self.circuit_preview.draw(output="text"))
+        print("Measurement probabilities:")
+        for state, probability in sorted(self.circuit_probabilities.items()):
+            print(f" {state}: {probability:.1%}")
+
+    def gameplay_turn(self):
+        if self.enemy.health <= 0 or self.player.health <= 0:
+            print("Combat has ended!")
+            return
+
+        self.start_turn()
+        self.update_circuit_preview()
+        self.play_hand()
+
+        self.discard_pile.extend(self.hand)
+        self.hand.clear()
+
     def play_hand(self):
         while self.hand:
+            self.display_game()
             choice = input("Choose a card to play (1-4), or press Enter to end your turn: ").strip()
             if not choice:
                 break
@@ -223,8 +304,9 @@ class Game:
             card = self.hand[hand_index]
             if self.play_card(card):
                 self.discard_pile.append(self.hand.pop(hand_index))
-                if self.hand:
-                    self.show_hand()
+                if isinstance(card, GateCard):
+                    self.update_circuit_preview()
+        self.display_game()
 
     def play_card(self, card, qubit=0, control=0, target=1):
         if card.energy_cost > self.player.energy:
@@ -286,6 +368,7 @@ class Game:
         print(f"Floor: {self.floor}         Turn: {self.turn}\n")
 
         self.show_status()
+        self.show_circuit()
         self.show_hand()
 
 

@@ -14,10 +14,14 @@ def build_circuit(n_qubits, gates):
             circuit.h(gate[1])
         elif name == "x":
             circuit.x(gate[1])
+        elif name == "y":
+            circuit.y(gate[1])
         elif name == "z":
             circuit.z(gate[1])
         elif name == "cx":
             circuit.cx(gate[1], gate[2])
+        elif name == "cz":
+            circuit.cz(gate[1], gate[2])
         else:
             raise ValueError(f"Unknown gate: {name}")
 
