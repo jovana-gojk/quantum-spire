@@ -162,6 +162,7 @@ class Enemy:
         self.state_shield = state_shield
         self.shield_status = True
         self.damage = damage
+        self.is_attacking = True
 
     def take_damage(self, amount):
         if self.shield_status == False:
@@ -174,6 +175,9 @@ class Enemy:
         over_damage = self.damage - blocked
         player.health = max(0, player.health - over_damage)
         return over_damage
+    
+    def next_phase(self):
+        self.is_attacking = not self.is_attacking
 
 class Game:
     def __init__(self, backend):
@@ -335,7 +339,12 @@ class Game:
         # Display current state of the player and enemy after playing a card
         print(f"Player HP:  {self.player.health}/{self.player.max_health}       Block:  {self.player.block}")
         print(f"\nEnemy:    {self.enemy.name}")
-        print(f"Enemy HP:   {self.enemy.health}/{self.enemy.max_health}     Incoming Damage:   {self.enemy.damage}")
+
+        if self.enemy.is_attacking:
+            phase = f"Attack for {self.enemy.damage} damage"
+        else:
+            phase = f"Rest"
+        print(f"Enemy HP:   {self.enemy.health}/{self.enemy.max_health}     Enemy intent:   {phase}")
 
         shield = "ACTIVE" if self.enemy.shield_status else "BROKEN"
         print(f"Quantum State Shield:   {shield} (requires |{self.enemy.state_shield}⟩)")
@@ -540,14 +549,18 @@ class Game:
         self.pending_damage = 0
 
         # Update block interaction with message in terminal
-        if self.enemy.health > 0:
+        if self.enemy.health >= 0:
             blocked = self.player.block - self.enemy.damage
-            over_damage = self.enemy.do_damage(self.player)
-
+            if self.enemy.is_attacking:
+                over_damage = self.enemy.do_damage(self.player)
+                print(f"The enemy dealt {over_damage} damage to you.")
+            else:
+                print("Enemy rests this turn. You take no damage.")
+            self.enemy.next_phase()
             if blocked >= 0:
                 print(f"You blocked {self.enemy.damage} damage.")
 
-            print(f"The enemy dealt {over_damage} damage to you.")
+
         else:
             print("Enemy defeated!")
 
