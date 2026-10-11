@@ -375,8 +375,8 @@ class Game:
             elif name == "cz":
                 self.pending_damage += 6
                 print("CZ passive: dealt 6 damage.")
-            elif name == "cxx":
-                self.pending_damage += 6
+            elif name == "ccx":
+                self.pending_damage += 12
                 print("Toffoli passive: dealt 12 damage.")
 
     def draw_hand(self):
