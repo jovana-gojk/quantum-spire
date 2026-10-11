@@ -40,7 +40,7 @@ You climb ten floors. Floors 1, 2, 4, 5, 6, 8 and 10 are fights. Floors 3, 7 and
 
 ### Your turn
 
-- You start with 30 HP, 3 energy per turn, and 1 qubit (maximum 4).
+- You start with 30 HP, 3 energy per turn, and 1 qubit.
 - You draw 4 cards each turn from your deck.
 - **Gate cards** add a quantum gate to your circuit. The circuit carries over from turn to turn within a floor and resets on the next floor.
 - **Attack cards** queue damage. **Skill cards** give block or healing.
