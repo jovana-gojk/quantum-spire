@@ -3,7 +3,6 @@ import os
 import copy
 from quantum import build_circuit, check_bell, check_deutsch_jozsa, check_ghz, get_exact_probabilities, run_circuit
 
-
 # Game constants
 STARTING_HEALTH = 30
 STARTING_ENERGY = 3
