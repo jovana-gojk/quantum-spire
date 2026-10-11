@@ -2,14 +2,18 @@
 
 A terminal deckbuilder roguelike inspired by *Slay the Spire*, where combat is fought with real quantum circuits. Play cards to build a circuit, measure it, and break each enemy's **quantum state shield** before you can hurt it.
 
+This project is under the Quantum Playground theme: an interactive game that teaches quantum mechanics with a roguelike spin. It teaches circuit construction in a creative way, letting the player learn how gates interact with each other and how to entangle qubits. Boss floors also teach specific quantum circuit problems.
+
 Developed by Jovana Gojkovic. MIT licensed.
 
 ## Requirements
 
-- Python 3.9+
+- Python 3
 - `qiskit` and `qiskit-aer` (see `requirements.txt`)
 
 ```bash
+git clone https://github.com/jovana-gojk/quantum-spire
+cd quantum-spire
 pip install -r requirements.txt
 ```
 
@@ -21,7 +25,7 @@ python src/main.py
 
 This is an **interactive terminal game**. It reads your choices from the keyboard with `input()`, so it must be run in a normal terminal. It uses the local `AerSimulator` from `qiskit-aer` to run your circuits.
 
-If the game is run somewhere with no keyboard input (for example a platform that runs scripts without a terminal), `input()` fails and the game stops with an error. A separate autoplay version exists for that case.
+If the game is run somewhere with no keyboard input (for example a platform that runs scripts without a terminal), `input()` fails and the game stops with an error. A separate autoplay version, which has a bot play when input is unavailable, was made for Qollab.
 
 ## Controls
 
@@ -64,6 +68,7 @@ Once a shield is broken, damage goes through. Gates in your circuit then also ha
 | Pauli-Z | 3 damage |
 | CNOT | 6 damage |
 | CZ | 6 damage |
+| Toffoli | 12 damage |
 
 Enemies alternate between attacking and resting. Block resets at the start of each turn.
 
