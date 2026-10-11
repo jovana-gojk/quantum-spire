@@ -1,7 +1,6 @@
 import random
 import os
 import copy
-import time
 from quantum import build_circuit, check_bell, check_deutsch_jozsa, check_ghz, get_exact_probabilities, run_circuit
 
 
