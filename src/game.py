@@ -631,11 +631,11 @@ class Game:
     def display_game(self):
         # Display top of the screen with title, turn and floor
         clear_terminal()
-
-        print("-" * 50)
-        print("QUANTUM SPIRE")
-        print("-" * 50)
-
+        print("""
+┏━┓╻ ╻┏━┓┏┓╻╺┳╸╻ ╻┏┳┓   ┏━┓┏━┓╻┏━┓┏━╸
+┃┓┃┃ ┃┣━┫┃┗┫ ┃ ┃ ┃┃┃┃   ┗━┓┣━┛┃┣┳┛┣╸ 
+┗┻┛┗━┛╹ ╹╹ ╹ ╹ ┗━┛╹ ╹   ┗━┛╹  ╹╹┗╸┗━╸
+""")
         print(f"Floor: {self.floor}         Turn: {self.turn}\n")
 
         # Show other aspects of the game
@@ -691,3 +691,31 @@ class Game:
         input("\nPress Enter to continue...")
         self.discard_pile.extend(self.hand)
         self.hand.clear()
+
+    def show_title_screen(self):
+        clear_terminal()
+
+        print(r"""
+█████  █    █ ████  ██████ █████ █    █ █████████      ██████ █████ █  █████  ██████
+█   █  █    █ █   █ █    █   █   █    █ █   █   █      █      █   █ █  █   █  █     
+██  █  ██   █ █████ ██   █   ██  ██   █ ██  █   █      ██████ █████ ██ ██████ ███   
+██  █  ██   █ ██  █ ██   █   ██  ██   █ ██      █          ██ ██    ██ ██   █ ██    
+██████ ██████ ██  █ ██   █   ██  ██████ ██      █      ██████ ██    ██ ██   █ ██████
+""")
+
+        print("     Ten floors stand between you and the summit.")
+        print("     Build quantum circuits, defeat enemies, and upgrade your deck as the challenges grow more complex.\n")
+        print("             Inspired by Slay the Spire, and developed by Jovana Gojkovic\n")
+
+        print("  1. Start Game")
+        print("  2. Quit")
+
+        while True:
+            choice = input("\n  Choose an option: ").strip()
+
+            if choice == "1":
+                return True
+            elif choice == "2":
+                return False
+            else:
+                print("  Enter 1 or 2.")

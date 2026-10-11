@@ -14,7 +14,10 @@ def get_backend():
 def main():
     backend = get_backend()
     game = Game(backend=backend)
-    game.run()
+    if game.show_title_screen():
+        game.run()
+    else:
+        print("Thanks for playing Quantum Spire!")
 
 # Run on my own computer
 if __name__ == "__main__" and "backend" not in globals():
